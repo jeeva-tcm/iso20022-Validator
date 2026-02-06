@@ -1,0 +1,10 @@
+STARTUP ERROR: invalid syntax (validator.py, line 569)
+Traceback (most recent call last):
+  File "C:\Users\HP\Desktop\iso20022 Validator\backend\run.py", line 7, in <module>
+    from app.main import app
+  File "C:\Users\HP\Desktop\iso20022 Validator\backend\app\main.py", line 14, in <module>
+    from .services.validator import ISOValidator
+  File "C:\Users\HP\Desktop\iso20022 Validator\backend\app\services\validator.py", line 569
+    except etree.DocumentInvalid as e:
+    ^^^^^^
+SyntaxError: invalid syntax

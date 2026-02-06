@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+    <FIToFICstmrCdtTrf>
+        <GrpHdr>
+            <MsgId>MSG123456789</MsgId>
+            <CreDtTm>2026-02-03T10:00:00Z</CreDtTm>
+            <NbOfTxs>1</NbOfTxs>
+            <SttlmInf>
+                <SttlmMtd>IND</SttlmMtd>
+            </SttlmInf>
+        </GrpHdr>
+        <CdtTrfTxInf>
+            <PmtId>
+                <EndToEndId>REF-999</EndToEndId>
+            </PmtId>
+            <IntrBkSttlmAmt Ccy="USD">5000.00</IntrBkSttlmAmt>
+            <ChrgBr>SLEV</ChrgBr>
+            <Dbtr>
+                <Nm>John Doe</Nm>
+                <PstlAdr>
+                    <Ctry>US</Ctry>
+                </PstlAdr>
+            </Dbtr>
+            <Cdtr>
+                <Nm>Jane Smith</Nm>
+                <PstlAdr>
+                    <Ctry>GB</Ctry>
+                </PstlAdr>
+            </Cdtr>
+            <CdtrAgt>
+                <FinInstnId>
+                    <BIC>ABCDUS33XXX</BIC>
+                    <PstlAdr>
+                        <!-- Missing Town name <TwnNm> which will trigger Layer 3 error for 2026+ -->
+                    </PstlAdr>
+                </FinInstnId>
+            </CdtrAgt>
+        </CdtTrfTxInf>
+    </FIToFICstmrCdtTrf>
+</Document>
