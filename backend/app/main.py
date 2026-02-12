@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -25,6 +25,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"]
 )
 
 validator = ISOValidator()
@@ -102,6 +103,44 @@ def get_history(skip: int = 0, limit: int = 100, db: Session = Depends(database.
         print(f"Error fetching history: {e}")
         return []
 
+@app.get("/history/export")
+def export_history(db: Session = Depends(database.get_db)):
+    try:
+        results = db.query(history.ValidationHistory).order_by(history.ValidationHistory.timestamp.desc()).all()
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Header
+        writer.writerow(["Timestamp", "Validation ID", "Message Type", "Status", "Errors", "Warnings", "Duration (ms)"])
+        
+        for row in results:
+            ts_str = row.timestamp.strftime("%Y-%m-%d %H:%M:%S") if row.timestamp else ""
+            writer.writerow([
+                f"{ts_str} (UTC)",
+                row.validation_id,
+                row.message_type,
+                row.status,
+                row.total_errors,
+                row.total_warnings,
+                row.execution_time_ms
+            ])
+        
+        csv_content = output.getvalue()
+        output.close()
+        
+        return Response(
+            content=csv_content,
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": "attachment; filename=iso20022_audit_trail.csv",
+                "Access-Control-Expose-Headers": "Content-Disposition"
+            }
+        )
+    except Exception as e:
+        print(f"EXPORT ERROR: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
 @app.get("/history/{validation_id}")
 def get_history_detail(validation_id: str, db: Session = Depends(database.get_db)):
     result = db.query(history.ValidationHistory).filter(history.ValidationHistory.validation_id == validation_id).first()
@@ -111,35 +150,6 @@ def get_history_detail(validation_id: str, db: Session = Depends(database.get_db
         "report": result.report_json,
         "original_message": result.original_message
     }
-
-@app.get("/history/export")
-def export_history(db: Session = Depends(database.get_db)):
-    results = db.query(history.ValidationHistory).order_by(history.ValidationHistory.timestamp.desc()).all()
-    
-    output = io.StringIO()
-    writer = csv.writer(output)
-    
-    # Header
-    writer.writerow(["Timestamp", "Validation ID", "Message Type", "Status", "Errors", "Warnings", "Duration (ms)"])
-    
-    for row in results:
-        ts_str = row.timestamp.strftime("%Y-%m-%d %H:%M:%S") if row.timestamp else ""
-        writer.writerow([
-            f"{ts_str} (UTC)",
-            row.validation_id,
-            row.message_type,
-            row.status,
-            row.total_errors,
-            row.total_warnings,
-            row.execution_time_ms
-        ])
-    
-    output.seek(0)
-    return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=iso20022_audit_trail.csv"}
-    )
 
 @app.delete("/history/{validation_id}")
 def delete_history_record(validation_id: str, db: Session = Depends(database.get_db)):

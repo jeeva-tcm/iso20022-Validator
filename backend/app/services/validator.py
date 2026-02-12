@@ -94,6 +94,7 @@ class ISOValidator:
         self._cache_duration = 3600 # 1 hour
         
         # Load Reference Data
+        self._ensure_xsds_extracted()
         self.supported_bics = self._load_bics()
         self.codelists = self._load_codelists()
         
@@ -120,6 +121,39 @@ class ISOValidator:
             except Exception as e:
                 print(f"Error loading BICs: {e}")
         return bics
+
+    def _ensure_xsds_extracted(self):
+        """
+        High-Performance Extraction Engine:
+        Automatically unzips all XSD blueprints from the ZIP library into 
+        the 'extracted' directory for instant validation readiness.
+        """
+        source_dir = os.path.dirname(self.xsd_path)
+        if not os.path.exists(self.xsd_path):
+            os.makedirs(self.xsd_path)
+
+        if not os.path.exists(source_dir):
+            return
+
+        print(f"Auto-Syncing XSD Library...")
+        import zipfile
+        for filename in os.listdir(source_dir):
+            if filename.endswith(".zip"):
+                zip_path = os.path.join(source_dir, filename)
+                try:
+                    with zipfile.ZipFile(zip_path, 'r') as zf:
+                        # Extract only .xsd files that don't exist yet to save time
+                        for member in zf.namelist():
+                            if member.endswith(".xsd"):
+                                base_name = os.path.basename(member)
+                                if not base_name: continue
+                                
+                                target_file = os.path.join(self.xsd_path, base_name)
+                                if not os.path.exists(target_file):
+                                    with zf.open(member) as source, open(target_file, 'wb') as target:
+                                        target.write(source.read())
+                except Exception as e:
+                    print(f"Warning: Could not extract {filename}: {e}")
 
     def _load_codelists(self) -> Dict[str, Any]:
         """Loads all JSON codelists from the resource directory"""
@@ -658,9 +692,19 @@ class ISOValidator:
 
         # --- 2. SPECIAL CASE: BIC/BICFI Failures ---
         if any(x in msg.upper() for x in ["BICFI", "BICBE", "ANYBIC", "BIC"]):
+            # Extract the actual value if possible for deeper diagnosis
+            val_match = re.search(r"value '([^']+)'", msg)
+            val = val_match.group(1) if val_match else ""
+            
             if "pattern" in msg.lower():
+                # Specific diagnosis: Is it the 5th/6th character (Country Code)?
+                if len(val) >= 6 and not (val[4].isalpha() and val[5].isalpha()):
+                    return ("Invalid BIC Country Code.", 
+                            f"The BIC '{val}' is 8/11 characters long, but characters 5 and 6 (the Country Code) must be letters only (e.g., 'GB', 'US', 'FR'). Found '{val[4:6]}'.")
+                
                 return ("Invalid BIC Code format.", 
-                        "The BIC code provided does not match the ISO 9362 standard. A valid BIC must be exactly 8 or 11 characters long (e.g., SWIFT123 or SWIFT123XXX). Check for spaces or invalid symbols.")
+                        "The BIC code provided does not match the ISO 9362 standard. A valid BIC must be exactly 8 or 11 characters long and consist of: 4-char bank code, 2-letter country code, 2-char location code, and optional 3-char branch code (e.g., BNKGB2LXXX).")
+            
             if "atomic type" in msg.lower() or "length" in msg.lower():
                 return ("Incorrect BIC Length.", "International identifiers (BIC) must be either 8 or 11 characters long.")
 

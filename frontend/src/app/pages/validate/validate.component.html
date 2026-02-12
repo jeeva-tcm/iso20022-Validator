@@ -51,15 +51,49 @@
                 <mat-card-content>
                     <!-- Validation Mode removed as per request - default Full 1-5 is used -->
 
-                    <div class="option-group">
-                        <mat-form-field appearance="outline" class="full-width">
-                            <mat-label>Message Type (Searchable)</mat-label>
-                            <input type="text" placeholder="Select or type message..." aria-label="Message Type"
-                                matInput [formControl]="messageControl" [matAutocomplete]="auto">
-                            <mat-autocomplete #auto="matAutocomplete">
-                                <mat-option *ngFor="let option of filteredOptions | async" [value]="option">
-                                    {{option}}
-                                </mat-option>
+                    <div class="message-type-selector">
+                        <mat-form-field appearance="outline" class="full-width modern-search">
+                            <mat-icon matPrefix>search</mat-icon>
+                            <input type="text" placeholder="Type a message type..." aria-label="Message Type" matInput
+                                [formControl]="messageControl" [matAutocomplete]="auto">
+                            <mat-autocomplete #auto="matAutocomplete" class="premium-autocomplete">
+                                <mat-optgroup label="Popular Messages">
+                                    <mat-option *ngFor="let option of popularMessages" [value]="option">
+                                        <div class="option-content">
+                                            <div class="family-icon"
+                                                [style.background-color]="getMessageFamily(option).color + '20'"
+                                                [style.color]="getMessageFamily(option).color">
+                                                <mat-icon>{{getMessageFamily(option).icon}}</mat-icon>
+                                            </div>
+                                            <div class="message-info">
+                                                <span class="m-code">{{option.split(' ')[0]}}</span>
+                                                <span class="m-desc">{{option.includes('(') ?
+                                                    option.split('(')[1].replace(')', '') : ''}}</span>
+                                            </div>
+                                            <mat-icon class="selected-check"
+                                                *ngIf="messageControl.value === option">check</mat-icon>
+                                        </div>
+                                    </mat-option>
+                                </mat-optgroup>
+
+                                <mat-optgroup label="All Messages">
+                                    <mat-option *ngFor="let option of filteredOptions | async" [value]="option">
+                                        <div class="option-content">
+                                            <div class="family-icon"
+                                                [style.background-color]="getMessageFamily(option).color + '20'"
+                                                [style.color]="getMessageFamily(option).color">
+                                                <mat-icon>{{getMessageFamily(option).icon}}</mat-icon>
+                                            </div>
+                                            <div class="message-info">
+                                                <span class="m-code">{{option.split(' ')[0]}}</span>
+                                                <span class="m-desc">{{option.includes('(') ?
+                                                    option.split('(')[1].replace(')', '') : ''}}</span>
+                                            </div>
+                                            <mat-icon class="selected-check"
+                                                *ngIf="messageControl.value === option">check</mat-icon>
+                                        </div>
+                                    </mat-option>
+                                </mat-optgroup>
                             </mat-autocomplete>
                         </mat-form-field>
                     </div>
@@ -193,12 +227,17 @@
                                                     </div>
                                                     <div class="detail-item full-width fix-suggestion"
                                                         *ngIf="issue.fix_suggestion">
-                                                        <label>Action To Fix</label>
-                                                        <div class="fix-box">
-                                                            <p>{{issue.fix_suggestion}}</p>
-                                                            <button mat-button color="primary"
-                                                                (click)="$event.stopPropagation()">
-                                                                <mat-icon>content_copy</mat-icon> COPY
+                                                        <label class="fix-label">
+                                                            <mat-icon>auto_fix_high</mat-icon> SMART FIX SUGGESTION
+                                                        </label>
+                                                        <div class="fix-box premium-fix">
+                                                            <div class="fix-content">
+                                                                <p>{{issue.fix_suggestion}}</p>
+                                                            </div>
+                                                            <button mat-raised-button color="primary"
+                                                                class="copy-fix-btn"
+                                                                (click)="copyToClipboard(issue.fix_suggestion); $event.stopPropagation()">
+                                                                <mat-icon>content_copy</mat-icon> COPY FIX
                                                             </button>
                                                         </div>
                                                     </div>

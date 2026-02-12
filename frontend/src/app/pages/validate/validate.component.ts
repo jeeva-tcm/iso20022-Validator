@@ -63,21 +63,25 @@ export class ValidateComponent implements OnInit {
 
     allMessageTypes: string[] = ['Auto-detect'];
     private standardMXTypes: string[] = [
-        'pacs.008.001.08 (Credit Transfer)',
-        'pacs.009.001.08 (Financial Institution Credit Transfer)',
+        'pacs.008.001.08 (Local/Cross-Border Credit Transfer)',
+        'pacs.009.001.08 (FI Credit Transfer)',
         'pacs.002.001.10 (Payment Status Report)',
-        'pacs.004.001.09 (Payment Return)',
-        'camt.053.001.08 (Bank to Customer Statement)',
-        'camt.052.001.08 (Bank to Customer Report)',
-        'camt.054.001.08 (Bank to Customer Debit/Credit Notification)',
-        'camt.029.001.09 (Resolution of Investigation)',
-        'pain.001.001.09 (Customer Credit Transfer Initiation)',
-        'pain.002.001.10 (Customer Payment Status Report)',
-        'pain.008.001.08 (Customer Direct Debit Initiation)',
-        'acmt.001.001.07 (Account Opening Request)',
-        'admi.004.001.02 (System Event Notification)',
-        'auth.001.001.02 (Financial Institution Identification)',
-        'head.001.001.01 (Business Application Header)'
+        'pacs.004.001.09 (Return)',
+        'camt.053.001.08 (Statement)',
+        'camt.052.001.08 (Report)',
+        'camt.054.001.08 (Notification)',
+        'camt.029.001.09 (Investigation)',
+        'pain.001.001.09 (Initiation)',
+        'pain.002.001.10 (Status Report)',
+        'pain.008.001.08 (Direct Debit)',
+        'head.001.001.02 (AppHdr)'
+    ];
+
+    popularMessages: string[] = [
+        'Auto-detect',
+        'pacs.008.001.08 (Local/Cross-Border Credit Transfer)',
+        'camt.053.001.08 (Statement)',
+        'pain.001.001.09 (Initiation)'
     ];
 
     constructor(
@@ -120,7 +124,7 @@ export class ValidateComponent implements OnInit {
 
         // Sync local model with control
         this.messageControl.valueChanges.subscribe(val => {
-            if (val) this.messageType = val.split(' ')[0]; // Extract just the code if needed
+            if (val) this.messageType = val.split(' ')[0];
         });
     }
 
@@ -128,7 +132,6 @@ export class ValidateComponent implements OnInit {
         this.isLoading = true;
         this.http.get<any>(this.config.getApiUrl(`/history/${id}`)).subscribe({
             next: (data) => {
-                // data is now { report: ..., original_message: ... }
                 this.report = data.report;
                 this.xmlContent = data.original_message;
                 this.updateLineNumbers();
@@ -141,9 +144,21 @@ export class ValidateComponent implements OnInit {
         });
     }
 
+    getMessageFamily(option: string): any {
+        const family = option.split('.')[0].toLowerCase();
+        if (option === 'Auto-detect') return { icon: 'auto_awesome', color: '#6366f1' };
+        if (family === 'pacs') return { icon: 'account_balance', color: '#10b981' };
+        if (family === 'camt') return { icon: 'analytics', color: '#f59e0b' };
+        if (family === 'pain') return { icon: 'payments', color: '#ef4444' };
+        if (family === 'head') return { icon: 'info', color: '#64748b' };
+        return { icon: 'insert_drive_file', color: '#94a3b8' };
+    }
+
     private _filter(value: string): string[] {
         const filterValue = value.toLowerCase();
-        return this.allMessageTypes.filter(option => option.toLowerCase().includes(filterValue));
+        return this.allMessageTypes.filter(option =>
+            option.toLowerCase().includes(filterValue)
+        );
     }
 
     onFileSelected(event: any) {
@@ -305,6 +320,15 @@ export class ValidateComponent implements OnInit {
         } else {
             this.selectedIssue = issue;
         }
+    }
+
+    copyToClipboard(text: string) {
+        navigator.clipboard.writeText(text).then(() => {
+            this.snackBar.open('Copied to clipboard!', 'Dismiss', { duration: 2000 });
+        }).catch(err => {
+            console.error('Could not copy text: ', err);
+            this.snackBar.open('Failed to copy text', 'Close', { duration: 3000 });
+        });
     }
 
     scrollToLine(lineInfo: any) {

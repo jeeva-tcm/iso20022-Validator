@@ -1,12 +1,13 @@
-import zipfile
 import os
+import zipfile
 
-zip_path = r'c:\Users\HP\Desktop\iso20022 Validator\backend\xsds\pacs.zip'
-out_file = r'c:\Users\HP\Desktop\iso20022 Validator\backend\zip_contents.txt'
-with open(out_file, 'w') as f:
-    if os.path.exists(zip_path):
-        with zipfile.ZipFile(zip_path, 'r') as zf:
-            for name in zf.namelist():
-                f.write(name + '\n')
-    else:
-        f.write("ZIP not found")
+xsd_root = r'C:\Users\HP\Desktop\iso20022 Validator\backend\xsds'
+print(f"Directory: {xsd_root}")
+for f in os.listdir(xsd_root):
+    if f.endswith('.zip'):
+        print(f"Zip: {f}")
+        try:
+            with zipfile.ZipFile(os.path.join(xsd_root, f), 'r') as z:
+                print(f"  Files: {z.namelist()[:5]}... (total {len(z.namelist())})")
+        except Exception as e:
+            print(f"  Error: {e}")
