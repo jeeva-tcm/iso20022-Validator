@@ -1,0 +1,167 @@
+# ============================================
+# ISO 20022 Validator - Git Ignore File
+# ============================================
+
+# ===== Python Backend =====
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+iso_validator.db
+
+# Environment variables
+.env
+.env.local
+
+# Logs
+*.log
+*.txt
+logs/
+startup_error.txt
+fix_log.txt
+fix_log_py.txt
+server_status.txt
+
+# ===== Angular Frontend =====
+# Angular compiled output
+/frontend/dist/
+/frontend/tmp/
+/frontend/out-tsc/
+/frontend/.angular/
+
+# Dependencies
+/frontend/node_modules/
+/frontend/package-lock.json
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.history/*
+
+# System Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== Application Specific =====
+# XSD extracted files (large, can be regenerated)
+/backend/xsds/extracted/
+
+# BIC data (if large)
+# /backend/bics/
+
+# Test coverage
+coverage/
+*.coverage
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+
+# Pytest
+.pytest_cache/
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# Build artifacts
+*.pyc
+*.pyo
+*.exe
+*.dll
+
+# Documentation builds
+docs/_build/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Misc
+*.bak
+*.orig
+.sass-cache/
+connect.lock
+typings/
