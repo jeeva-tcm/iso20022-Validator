@@ -51,3 +51,9 @@ class HistorySummary(BaseModel):
 
     class Config:
         from_attributes = True
+
+class DashboardStats(BaseModel):
+    total_audits: int
+    passed_messages: int
+    failed_messages: int
+    validation_quality: int  # Percentage

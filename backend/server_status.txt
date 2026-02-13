@@ -1,4 +1,1 @@
-  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
-                                 Dload  Upload   Total   Spent    Left  Speed
-  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100    47  100    47    0     0   6750      0 --:--:-- --:--:-- --:--:--  7833
 {"status":"ok","service":"ISO 20022 Validator"}

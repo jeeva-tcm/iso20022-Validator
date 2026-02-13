@@ -298,3 +298,8 @@
     color: #ef4444 !important;
     background-color: #fee2e2 !important;
 }
+
+.header-actions {
+    display: flex;
+    gap: 12px;
+}

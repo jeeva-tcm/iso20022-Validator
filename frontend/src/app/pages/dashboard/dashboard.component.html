@@ -64,7 +64,12 @@
             <mat-card class="recent-card">
                 <mat-card-header>
                     <mat-card-title>Recent Validation Activity</mat-card-title>
-                    <button mat-button color="primary" routerLink="/history">View All</button>
+                    <div style="display: flex; gap: 8px;">
+                        <button mat-icon-button (click)="refresh()" matTooltip="Refresh data">
+                            <mat-icon>refresh</mat-icon>
+                        </button>
+                        <button mat-button color="primary" routerLink="/history">View All</button>
+                    </div>
                 </mat-card-header>
                 <mat-card-content>
                     <div class="activity-list" *ngIf="recentActivity.length > 0">
@@ -91,25 +96,6 @@
         </div>
 
         <div class="side-column">
-            <mat-card class="platform-card">
-                <mat-card-header>
-                    <mat-card-title>System Status</mat-card-title>
-                </mat-card-header>
-                <mat-card-content>
-                    <div class="status-item">
-                        <span class="status-label">API Gateway</span>
-                        <span class="status-tag online">ONLINE</span>
-                    </div>
-                    <div class="status-item">
-                        <span class="status-label">Validator Engine</span>
-                        <span class="status-tag online">STABLE</span>
-                    </div>
-                    <div class="status-item">
-                        <span class="status-label">Audit DB</span>
-                        <span class="status-tag online">CONNECTED</span>
-                    </div>
-                </mat-card-content>
-            </mat-card>
 
             <mat-card class="info-card">
                 <mat-card-header>

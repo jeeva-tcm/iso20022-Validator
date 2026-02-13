@@ -50,8 +50,9 @@ class ValidationReport:
             self.status = "FAIL"
         elif issue.severity == "WARNING":
             self.warnings += 1
-            if self.status != "FAIL":
-                self.status = "WARNING"
+            # User Request: Treat WARNING as PASS
+            # if self.status != "FAIL":
+            #     self.status = "WARNING"
 
     def to_dict(self):
         # Step 9: Generate Validation Report Format
@@ -230,12 +231,8 @@ class ISOValidator:
         else:
             detected_type = message_type
 
-        # NEW: Normalize to Family ONLY (e.g. pacs.008.001.08 -> pacs.008)
-        # This makes the entire pipeline version-blind as requested
-        if detected_type and "." in detected_type:
-            parts = detected_type.split(".")
-            if len(parts) >= 2:
-                detected_type = ".".join(parts[:2])
+        # Keep full version in report for UI display
+        # The _get_xsd_path function will handle version-blind matching internally
 
         validation_id = f"VAL-{time.strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
         report = ValidationReport(validation_id, detected_type, mode)
@@ -262,11 +259,7 @@ class ISOValidator:
                         extracted = parts[-1]
                     
                     if extracted != "Unknown":
-                        # Normalize to family here too
-                        raw_parts = extracted.split(".")
-                        if len(raw_parts) >= 2:
-                            extracted = ".".join(raw_parts[:2])
-                            
+                        # Keep full version for display
                         report.message_type = extracted
                         detected_type = extracted
             except: 
@@ -296,7 +289,12 @@ class ISOValidator:
                 
                 if mode == "Full 1-5":
                     for layer_id in [3, 4, 5]:
-                        await self._run_dynamic_layer(layer_id, all_rules, canonical_data, line_map, report)
+                        self._run_dynamic_layer(layer_id, all_rules, canonical_data, line_map, report)
+                        
+                        # Stop if this layer failed
+                        layer_status = report.layer_status.get(str(layer_id), {}).get("status")
+                        if layer_status == "❌":
+                            break
             except Exception as e:
                 report.add_issue(ValidationIssue("WARNING", 3, "RULE_ENGINE_ERR", "/", f"Rule Engine encountered an issue: {str(e)}", "Partial validation completed."))
 
@@ -415,7 +413,9 @@ class ISOValidator:
         return "Unknown"
 
     def _finalize_report(self, report: ValidationReport, start_time: float) -> ValidationReport:
-        report.total_time_ms = (time.time() - start_time) * 1000
+        # Calculate total time as the sum of all layer times to ensure consistency in UI
+        total_layers = sum(l.get("time", 0) for l in report.layer_status.values())
+        report.total_time_ms = total_layers
         return report
 
     async def _run_layer_1(self, xml_content: str, report: ValidationReport, filename: Optional[str] = None) -> bool:
@@ -428,34 +428,45 @@ class ISOValidator:
         # 1. Payload Presence
         if not xml_content or not xml_content.strip():
             report.add_issue(ValidationIssue(
-                "ERROR", 1, "TECH-001", "PAYLOAD_PRESENCE",
-                "Empty or missing payload.",
-                "Provide a valid XML string or file."
+                "ERROR", 1, "Empty File", "Payload Missing",
+                "The uploaded file is empty or no content was provided.",
+                "Please upload a valid XML message file or paste XML content."
             ))
             report.layer_status["1"] = {"status": "❌", "time": (time.time() - start) * 1000}
             return False
 
         # 2. File Type Validation
-        # If filename is provided, check extension. If not, check content starts with XML declaration.
-        is_xml_ext = filename.lower().endswith('.xml') if filename else True
-        is_xml_content = xml_content.lstrip().startswith('<?xml')
+        allowed_exts = ('.xml', '.xsd', '.txt')
+        valid_ext = filename.lower().endswith(allowed_exts) if filename else True
         
-        if not is_xml_ext or (not filename and not is_xml_content and not xml_content.lstrip().startswith('<')):
-            report.add_issue(ValidationIssue(
-                "ERROR", 1, "TECH-002", "FILE_TYPE",
-                "Invalid file format. Only XML is accepted.",
-                "Ensure the file ends in .xml or content starts with valid XML declaration."
+        # Check content structure (must look like XML)
+        has_xml_structure = xml_content.lstrip().startswith(('<', '<?xml'))
+        
+        if not valid_ext:
+             report.add_issue(ValidationIssue(
+                "ERROR", 1, "Wrong File Type", "Invalid Extension",
+                f"The file '{filename}' is not supported.",
+                "Please upload a file with .xml, .xsd, or .txt extension."
             ))
-            report.layer_status["1"] = {"status": "❌", "time": (time.time() - start) * 1000}
-            return False
+             report.layer_status["1"] = {"status": "❌", "time": (time.time() - start) * 1000}
+             return False
+
+        if not has_xml_structure:
+             report.add_issue(ValidationIssue(
+                "ERROR", 1, "Invalid Content", "XML Content Required",
+                "The file content does not appear to be valid XML.",
+                "The file must contain XML code starting with '<' or '<?xml'."
+            ))
+             report.layer_status["1"] = {"status": "❌", "time": (time.time() - start) * 1000}
+             return False
 
         # 3. Payload Size
         size_kb = len(xml_content.encode('utf-8')) / 1024
         if size_kb > 100: # Standard SWIFT limit
              report.add_issue(ValidationIssue(
-                 "ERROR", 1, "TECH-003", "PAYLOAD_SIZE", 
-                 f"Message size ({size_kb:.1f} KB) exceeds the limit.",
-                 "Reduce payload size below 100 KB."
+                 "ERROR", 1, "File Too Large", "Size Limit Exceeded", 
+                 f"Your message is {size_kb:.1f} KB, which exceeds the maximum allowed size of 100 KB.",
+                 "Please reduce the message size or split it into multiple messages. SWIFT InterAct has a 100 KB limit."
              ))
              report.layer_status["1"] = {"status": "❌", "time": (time.time() - start) * 1000}
              return False
@@ -465,9 +476,9 @@ class ISOValidator:
         header_match = re.search(r'<\?xml[^>]+encoding=["\']([^"\']+)["\']', xml_content, re.IGNORECASE)
         if not header_match:
              report.add_issue(ValidationIssue(
-                "ERROR", 1, "TECH-004", "ENCODING",
-                "Missing XML declaration or encoding header.",
-                "Add <?xml version=\"1.0\" encoding=\"UTF-8\"?> at the top of the file."
+                "ERROR", 1, "Missing Header", "No XML Declaration",
+                "Your XML file is missing the required declaration header.",
+                "Add this line at the very top of your file: <?xml version=\"1.0\" encoding=\"UTF-8\"?>"
             ))
              report.layer_status["1"] = {"status": "❌", "time": (time.time() - start) * 1000}
              return False
@@ -475,9 +486,9 @@ class ISOValidator:
             encoding = header_match.group(1).upper()
             if encoding != "UTF-8":
                 report.add_issue(ValidationIssue(
-                    "ERROR", 1, "TECH-004", "ENCODING",
-                    f"Invalid encoding: {encoding}. Must be UTF-8.",
-                    "Update XML header to <?xml version=\"1.0\" encoding=\"UTF-8\"?>."
+                    "ERROR", 1, "Wrong Encoding", "Invalid Character Encoding",
+                    f"Your file uses {encoding} encoding, but ISO 20022 messages must use UTF-8.",
+                    "Change the encoding in your XML header to: <?xml version=\"1.0\" encoding=\"UTF-8\"?>"
                 ))
                 report.layer_status["1"] = {"status": "❌", "time": (time.time() - start) * 1000}
                 return False
@@ -486,9 +497,9 @@ class ISOValidator:
         illegal_chars = re.findall(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', xml_content)
         if illegal_chars:
             report.add_issue(ValidationIssue(
-                "ERROR", 1, "TECH-005", "ILLEGAL_CHARS",
-                "Message contains illegal control characters (ASCII 0-31).",
-                "Remove hidden non-printable characters or system symbols."
+                "ERROR", 1, "Invalid Characters", "Hidden Characters Found",
+                "Your message contains invisible control characters that are not allowed.",
+                "These hidden characters may have come from copy-pasting. Please use a plain text editor to clean your XML."
             ))
             report.layer_status["1"] = {"status": "❌", "time": (time.time() - start) * 1000}
             return False
@@ -507,9 +518,9 @@ class ISOValidator:
             
             if not iso_nodes:
                 report.add_issue(ValidationIssue(
-                    "ERROR", 1, "TECH-007", "DOCUMENT_DETECTION",
-                    "Missing mandatory ISO 20022 payload (Document/BusMsg).",
-                    "Ensure the message structure follows ISO 20022 MX formatting."
+                    "ERROR", 1, "Missing Structure", "No ISO 20022 Container",
+                    "Your XML is missing the required <Document> or <BusMsg> wrapper element.",
+                    "ISO 20022 messages must have a <Document> root element. Check the message structure against standard templates."
                 ))
                 report.layer_status["1"] = {"status": "❌", "time": (time.time() - start) * 1000}
                 return False
@@ -524,9 +535,9 @@ class ISOValidator:
             # Namespace Validation
             if not re.match(r'^urn:iso:std:iso:20022:tech:xsd:[a-z]{4}\.\d{3}\.\d{3}\.\d{2}$', ns) and "head.001" not in ns:
                 report.add_issue(ValidationIssue(
-                    "ERROR", 1, "TECH-008", "NAMESPACE_VALIDATION",
-                    f"Invalid namespace format: {ns}",
-                    "Namespace must follow 'urn:iso:std:iso:20022:tech:xsd:[family].[msg].[variant].[ver]'."
+                    "ERROR", 1, "Wrong Namespace", "Invalid ISO Namespace",
+                    f"The namespace '{ns}' doesn't match the ISO 20022 standard format.",
+                    "Use the correct namespace format: urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08 (example for pacs.008)."
                 ))
 
             # Metadata for later layers
@@ -534,16 +545,16 @@ class ISOValidator:
 
         except etree.XMLSyntaxError as e:
             report.add_issue(ValidationIssue(
-                "ERROR", 1, "REG-002", str(e.lineno),
-                "Malformed XML structure",
-                f"Syntax error at line {e.lineno}: {str(e)}."
+                "ERROR", 1, "XML Syntax Error", f"Line {e.lineno}",
+                "Your XML has a syntax error - check for missing or incorrect tags.",
+                f"Error details: {str(e)}. Common issues: unclosed tags, missing brackets, or typos in element names."
             ))
             report.layer_status["1"] = {"status": "❌", "time": (time.time() - start) * 1000}
             return False
 
         # Finish Layer 1
         success = report.status != "FAIL"
-        report.layer_status["1"] = {"status": "✅" if success else "❌", "time": (time.time() - start) * 1000}
+        report.layer_status["1"] = {"status": "✅" if success else "❌", "time": round((time.time() - start) * 1000, 2)}
         return success
 
     async def _run_layer_2(self, xml_content: str, report: ValidationReport, message_type: str) -> bool:
@@ -558,7 +569,7 @@ class ISOValidator:
             # Step 1 — Load Schema Set
             xsd_full_path = self._get_xsd_path(message_type)
             if not xsd_full_path or not os.path.exists(xsd_full_path):
-                report.add_issue(ValidationIssue("ERROR", 2, "SCH-001", "/", f"Schema file not found for '{message_type}'", "Ensure .xsd exists in repository"))
+                report.add_issue(ValidationIssue("ERROR", 2, "Schema Not Found", "Missing Validation Template", f"Cannot find the validation template for message type '{message_type}'.", "The schema file (.xsd) for this message type is not available in the system. Contact support if this message type should be supported."))
                 report.layer_status["2"] = {"status": "❌", "time": 0}
                 return False
 
@@ -575,7 +586,7 @@ class ISOValidator:
                     target_node = [full_xml_doc]
             
             if not target_node:
-                report.add_issue(ValidationIssue("ERROR", 2, "SCH-002", "/", "Structural Root (<Document>/<BusMsg>) not found for validation.", "Check message packaging."))
+                report.add_issue(ValidationIssue("ERROR", 2, "Missing Document", "No Root Element", "Cannot find the main <Document> or <BusMsg> container in your XML.", "Your message structure is incorrect. ISO 20022 messages must have a <Document> wrapper element."))
                 report.layer_status["2"] = {"status": "❌", "time": (time.time() - start) * 1000}
                 return False
 
@@ -611,6 +622,51 @@ class ISOValidator:
                 for error in e.error_log:
                     # Map the relative error line back to the absolute line in the full document
                     real_line = line_offset + error.line - 1
+                    
+                    # Smart Line Correction:
+                    # If we can identify the specific invalid value and tag, let's find the EXACT line in the original tree.
+                    # This fixes issues where re-parsing destroys line numbers.
+                    try:
+                        # Extract Tag and Value from error message
+                        # Msg format: "Element 'ChrgBr': [facet 'enumeration'] The value 'JEEC'..."
+                        tag_match = re.search(r"Element '([^']+)'", error.message)
+                        val_match = re.search(r"value '([^']+)'|Value '([^']+)'", error.message)
+                        
+                        if tag_match:
+                            tag_full = tag_match.group(1)
+                            # Strip namespace {urn...} if present
+                            tag_name = tag_full.split('}')[-1] if '}' in tag_full else tag_full
+                            
+                            candidates = main_node.xpath(f".//*[local-name()='{tag_name}']")
+                            found_line = None
+                            
+                            if val_match:
+                                # Case 1: Specific Value Error (High Precision)
+                                bad_val = val_match.group(1) or val_match.group(2)
+                                for c in candidates:
+                                    if c.text and c.text.strip() == bad_val:
+                                        found_line = c.sourceline
+                                        break
+                                
+                                # Ultimate Fallback: Text Search for <Tag>Value</Tag>
+                                if not found_line:
+                                    pattern = re.compile(f"<{tag_name}[^>]*>\s*{re.escape(bad_val)}\s*</{tag_name}>")
+                                    match = pattern.search(xml_content)
+                                    if match:
+                                        found_line = xml_content.count('\n', 0, match.start()) + 1
+                                        
+                            elif candidates:
+                                # Case 2: Structure/Missing Error (No bad value to match)
+                                # Just find the first instance of the problematic tag in the original tree.
+                                # This is better than a random offset.
+                                if candidates[0].sourceline:
+                                    found_line = candidates[0].sourceline
+                                    
+                            if found_line:
+                                real_line = found_line
+                    except:
+                        pass # Fallback to calculated line
+
                     friendly_msg, suggestion = self._simplify_error_message(error.message)
                     issues.append(ValidationIssue("ERROR", 2, "SCHEMA_VAL", str(real_line), friendly_msg, suggestion))
 
@@ -760,7 +816,7 @@ class ISOValidator:
             return ("The value format is incorrect.", "Check if you have used text where numbers are expected, or used invalid symbolic characters.")
 
         # --- 7. Length & Enumerations ---
-        if "is not facet-valid" in msg:
+        if "is not facet-valid" in msg or "facet 'enumeration'" in msg:
             if "length" in msg.lower():
                 return ("Field length limit exceeded.", "The text provided is either too long or too short for this specific field. Please check the character count.")
             if "pattern" in msg.lower():
@@ -770,7 +826,15 @@ class ISOValidator:
                 return (f"The format for '{name}' is incorrect.", 
                         "The data provided does not match the required pattern (e.g., invalid characters, wrong starting letter, or incorrect ID format).")
             if "enumeration" in msg.lower():
-                return ("Unauthorized Code used.", "The value provided is not in the list of recognized ISO 20022 codes for this field. Please use a standard-compliant code.")
+                 # Match: Field 'ChrgBr': [facet 'enumeration'] The value 'JEEC' is not an element of the set ..
+                 match_val = re.search(r"value '([^']+)'", msg)
+                 val = match_val.group(1) if match_val else "provided"
+                 
+                 match_elem = re.search(r"Element '([^']+)'", msg)
+                 elem = match_elem.group(1) if match_elem else "Field"
+                 
+                 return (f"Invalid value '{val}' for field '{elem}'.", 
+                        f"The value '{val}' is not allowed for '{elem}'. Please use one of the standard ISO 20022 codes allowed for this field.")
 
         # --- 8. Attributes & Nesting ---
         if "attribute" in msg.lower():
@@ -784,6 +848,12 @@ class ISOValidator:
         # Strip regex patterns from output to keep it clean for end-users
         clean_msg = re.sub(r"The value '.*' is not accepted by the pattern '.*'\.", "The value format is invalid.", clean_msg)
         
+        # Improve generic enumeration error if caught here
+        if "is not an element of the set" in clean_msg:
+             match_val = re.search(r"value '([^']+)'", clean_msg)
+             val = match_val.group(1) if match_val else "provided"
+             return (f"Invalid code '{val}'.", "This field only accepts specific strict codes (Enumeration). check the standard for allowed values.")
+
         return (clean_msg, "Please review this message block. Ensure standard character sets and ISO formats are followed.")
 
     def _get_xsd_path(self, message_type: str) -> Optional[str]:
@@ -830,7 +900,7 @@ class ISOValidator:
 
     def _load_all_rules(self, message_type: str) -> List[Dict[str, Any]]:
         """
-        Loads global rules + message-specific rules.
+        Loads global rules + family rules + message-specific rules.
         """
         rules = []
         
@@ -841,13 +911,28 @@ class ISOValidator:
                 with open(global_file, "r") as f:
                     rules.extend(json.load(f))
             except: pass
-            
-        # 2. Load Message Specific
-        base_msg = ".".join(message_type.split(".")[:2]) if "." in message_type else message_type
-        specific_file = os.path.join(self.rules_path, f"{base_msg}.json")
+
+        parts = message_type.split(".")
+        
+        # 2. Load Family Level (e.g., pacs.json)
+        if len(parts) >= 1:
+            family = parts[0]
+            family_file = os.path.join(self.rules_path, f"{family}.json")
+            if os.path.exists(family_file):
+                try:
+                    with open(family_file, "r") as f:
+                        rules.extend(json.load(f))
+                except: pass
+
+        # 3. Load Message Specific (e.g., pacs.008.json)
+        # Try pacs.008 first
+        specific_name = ".".join(parts[:2]) if len(parts) >= 2 else message_type
+        specific_file = os.path.join(self.rules_path, f"{specific_name}.json")
+        
+        # If not found, try full name just in case (e.g. pacs.008.001.08.json - rare but possible)
         if not os.path.exists(specific_file):
-            specific_file = os.path.join(self.rules_path, f"{message_type.split('.')[0]}.json")
-            
+             specific_file = os.path.join(self.rules_path, f"{message_type}.json")
+
         if os.path.exists(specific_file):
             try:
                 with open(specific_file, "r") as f:
@@ -856,7 +941,7 @@ class ISOValidator:
             
         return rules
 
-    async def _run_dynamic_layer(self, layer_id: int, rules: List[Dict[str, Any]], data: Dict[str, Any], line_map: Dict[str, int], report: ValidationReport):
+    def _run_dynamic_layer(self, layer_id: int, rules: List[Dict[str, Any]], data: Dict[str, Any], line_map: Dict[str, int], report: ValidationReport):
         """
         Executes all rules assigned to a specific layer.
         """
@@ -878,10 +963,14 @@ class ISOValidator:
             "time": round((time.time() - start) * 1000, 2)
         }
 
-    def _execute_rule_logic(self, rule: Dict[str, Any], data: Dict[str, Any], line_map: Dict[str, int], codelists: Dict[str, List[str]], report: ValidationReport):
+    def _execute_rule_logic(self, rule: Dict[str, Any], data: Dict[str, Any], line_map: Dict[str, int], codelists: Dict[str, list], report: ValidationReport):
         """
         Advanced Dynamic Rule Dispatcher.
         """
+        # Defensive check: rule must be a dictionary
+        if not isinstance(rule, dict):
+             return
+
         rule_type = rule.get("type", "expression")
         selector = rule.get("selector")
         layer = rule.get("layer", 3)
@@ -891,11 +980,11 @@ class ISOValidator:
 
         def _get_line(key):
              # Try exact indexed match, then try parent path
-             l = line_map.get(key)
+             l = line_map.get(key) if isinstance(line_map, dict) else None
              if not l:
                   # Strip index for lookup [0]
                   clean = re.sub(r'\[\d+\]', '', key)
-                  l = line_map.get(clean)
+                  l = line_map.get(clean) if isinstance(line_map, dict) else None
              return str(l) if l else "/"
 
         # 1. Selector Based Rules (Multiple fields)
@@ -908,7 +997,15 @@ class ISOValidator:
                 if rule_type == "codelist":
                     list_name = rule.get("list_name", "").lower()
                     if list_name in codelists:
-                        valid_codes = codelists[list_name].get("codes", [])
+                        cl_data = codelists[list_name]
+                        # Handle both list formats: {"codes": [...]} and [...]
+                        if isinstance(cl_data, dict):
+                            valid_codes = cl_data.get("codes", [])
+                        elif isinstance(cl_data, list):
+                            valid_codes = cl_data
+                        else:
+                            valid_codes = []
+                            
                         if value not in valid_codes:
                             report.add_issue(ValidationIssue(severity, layer, rule_id, _get_line(key), f"{desc} Value '{value}' not in list."))
                 
@@ -924,13 +1021,18 @@ class ISOValidator:
                          ccy_path = key.rsplit('.', 1)[0] + ".Ccy"
                     
                     ccy = data.get(ccy_path)
+                    allowed_decimals = None
+                    
                     if ccy and "currency" in codelists:
-                        allowed_decimals = codelists["currency"].get("currencies", {}).get(ccy)
-                        if allowed_decimals is not None:
-                            val_str = str(value)
-                            actual_decimals = len(val_str.split('.')[1]) if '.' in val_str else 0
-                            if actual_decimals > allowed_decimals:
-                                report.add_issue(ValidationIssue(severity, layer, rule_id, _get_line(key), f"Invalid decimal precision for {ccy}. Max {allowed_decimals}, found {actual_decimals}."))
+                         curr_list = codelists["currency"]
+                         if isinstance(curr_list, dict):
+                             allowed_decimals = curr_list.get("currencies", {}).get(ccy)
+                    
+                    if allowed_decimals is not None:
+                        val_str = str(value)
+                        actual_decimals = len(val_str.split('.')[1]) if '.' in val_str else 0
+                        if actual_decimals > allowed_decimals:
+                             report.add_issue(ValidationIssue(severity, layer, rule_id, _get_line(key), f"Invalid decimal precision for {ccy}. Max {allowed_decimals}, found {actual_decimals}."))
 
                 elif rule_type == "regex":
                     pattern = rule.get("pattern", ".*")
@@ -939,26 +1041,26 @@ class ISOValidator:
                 
                 elif rule_type == "expression":
                     rule_meta = {"severity": severity, "layer": layer, "rule_id": rule_id, "desc": desc}
-                    if not self._evaluate_expression(rule.get("expression", "True"), data, value, key, rule_meta):
+                    if not self._evaluate_expression(rule.get("expression", "True"), data, line_map, value, key, rule_meta):
                         report.add_issue(ValidationIssue(severity, layer, rule_id, _get_line(key), desc))
 
         # 2. Logic Based Rules
         else:
             condition = rule.get("condition", "True")
-            if not self._evaluate_expression(condition, data):
+            if not self._evaluate_expression(condition, data, line_map):
                 return
 
             for field in rule.get("mandatory_fields", []):
-                if not self._evaluate_expression(f"exists({field})", data):
+                if not self._evaluate_expression(f"exists({field})", data, line_map):
                     report.add_issue(ValidationIssue(severity, layer, rule_id, _get_line(field), desc))
 
             expr = rule.get("expression")
             if expr:
                 rule_meta = {"severity": severity, "layer": layer, "rule_id": rule_id, "desc": desc}
-                if not self._evaluate_expression(expr, data, KEY="", rule_meta=rule_meta):
+                if not self._evaluate_expression(expr, data, line_map, KEY="", rule_meta=rule_meta):
                      report.add_issue(ValidationIssue(severity, layer, rule_id, "/", desc))
 
-    def _evaluate_expression(self, expr: str, data: Dict[str, Any], VALUE: Any = None, KEY: str = "", rule_meta: Dict[str, Any] = None) -> bool:
+    def _evaluate_expression(self, expr: str, data: Dict[str, Any], line_map: Dict[str, int] = None, VALUE: Any = None, KEY: str = "", rule_meta: Dict[str, Any] = None) -> bool:
         """
         Evaluates dynamic expressions against the canonical data map.
         Supports indexed paths and global VALUE keyword.
@@ -967,12 +1069,18 @@ class ISOValidator:
             path = match.group(1).replace("[", "\\[").replace("]", "\\]")
             return "True" if any(re.match(f"^{path}(\\[\\d+\\])?(\\..*)?$", k) for k in data.keys()) else "False"
 
+        def _gl(key):
+             if not line_map: return "/"
+             l = line_map.get(key)
+             if not l:
+                  clean = re.sub(r'\[\d+\]', '', key)
+                  l = line_map.get(clean)
+             return str(l) if l else "/"
+
         def check_address(addr_path, data, report, severity, layer, rule_id, desc):
-            # 1. Skip if the address block itself is effectively empty or contains only non-mandatory fields
-            # This prevents ghost errors on optional address blocks.
+            # ... (Existing address check logic is fine, keeping it concise for this tool call)
             block_content = {k: v for k, v in data.items() if k.startswith(f"{addr_path}.")}
-            if not block_content:
-                return True
+            if not block_content: return True # Empty block is fine
 
             is_after_2026 = datetime.now() > datetime(2026, 11, 1)
             has_town = any(k.startswith(f"{addr_path}.TownNm") for k in data.keys())
@@ -984,52 +1092,73 @@ class ISOValidator:
 
             if issues_found:
                 for suffix in issues_found:
-                    # Clean path for reporting (remove prefixes like Document.FIToFI...)
-                    clean_field_path = (addr_path + suffix).split('.')[-4:] # Keep last 4 segments
+                    clean_field_path = (addr_path + suffix).split('.')[-4:]
                     field_path = ".".join(clean_field_path)
 
                     if is_after_2026:
-                        report.add_issue(ValidationIssue(severity, layer, rule_id, field_path, 
-                            f"{desc} (Mandate Active)", 
-                            "Add this mandatory field to comply with CBPR+ requirements."))
+                        report.add_issue(ValidationIssue(severity, layer, rule_id, field_path, f"{desc} (Mandate Active)", "Add this mandatory field to comply with CBPR+ requirements."))
                     else:
-                        report.add_issue(ValidationIssue("WARNING", layer, rule_id, field_path, 
-                            f"ADVISORY: {desc} (Future Mandate Nov 2026)", 
-                            f"Add {suffix[1:]} now to ensure future compatibility."))
+                        report.add_issue(ValidationIssue("WARNING", layer, rule_id, field_path, f"ADVISORY: {desc} (Future Mandate Nov 2026)", f"Add {suffix[1:]} now to ensure future compatibility."))
                 
-                if is_after_2026:
-                    return False
+                if is_after_2026: return False
+            return True
+
+        def check_bic_match(header_role, doc_role):
+            # 1. Find Header BIC
+            h_key = f"AppHdr.{header_role}.FIId.FinInstnId.BICFI"
+            h_val = data.get(h_key)
+            
+            # 2. Find Document BIC (Search anywhere in message)
+            d_val = None
+            d_key = None
+            suffix = f".{doc_role}.FinInstnId.BICFI"
+            
+            for k, v in data.items():
+                if k.endswith(suffix):
+                    d_val = v
+                    d_key = k
+                    break
+            
+            # If either is missing, we can't compare
+            if not h_val or not d_val:
+                return True 
+            
+            if h_val != d_val:
+                 # Add specific issue with correct line number
+                 line = _gl(d_key) if d_key else _gl(h_key)
+                 msg = f"{rule_meta.get('desc')} (Header: '{h_val}' vs Doc: '{d_val}')"
+                 
+                 report.add_issue(ValidationIssue(
+                     rule_meta.get("severity", "ERROR"), 
+                     rule_meta.get("layer", 3), 
+                     rule_meta.get("rule_id", "MX_MATCH"), 
+                     line, 
+                     msg,
+                     f"Update {doc_role} to match the Header BIC or vice versa."
+                 ))
+                 return True # Suppress generic error
+
             return True
 
         try:
             temp_expr = re.sub(r'exists\(([^)]+)\)', exists_sub, expr)
             
-            # Injection context - Protected constants
             ctx = {
-                "float": float, 
-                "int": int,
-                "str": str,
-                "len": len,
-                "datetime": datetime,
-                "True": True, 
-                "False": False, 
-                "None": None,
-                "VALUE": VALUE,
-                "KEY": KEY,
-                "DATA": data,
+                "float": float, "int": int, "str": str, "len": len, "datetime": datetime,
+                "True": True, "False": False, "None": None,
+                "VALUE": VALUE, "KEY": KEY, "DATA": data,
                 "check_address": lambda p: check_address(p, data, report, 
                                                         rule_meta.get("severity", "ERROR"), 
                                                         rule_meta.get("layer", 3), 
                                                         rule_meta.get("rule_id", "E001"), 
                                                         rule_meta.get("desc", "")) if rule_meta else True,
+                "check_bic_match": check_bic_match,
                 "is_after_2026": datetime.now() > datetime(2026, 11, 1),
                 "exists": lambda x: any(k.startswith(x) for k in data.keys())
             }
             
-            # Substitute data keys - Only if they are not reserved injection names
-            reserved = set(["VALUE", "KEY", "DATA", "True", "False", "None", "exists", "check_address", "datetime", "len", "float", "int", "str"])
+            reserved = set(["VALUE", "KEY", "DATA", "True", "False", "None", "exists", "check_address", "check_bic_match", "datetime", "len", "float", "int", "str"])
             for key in sorted(data.keys(), key=len, reverse=True):
-                # Pattern to match key as whole word only to avoid partial overlap substitution
                 pattern = r'\b' + re.escape(key) + r'\b'
                 if re.search(pattern, temp_expr) and key not in reserved:
                     val = f"'{data[key]}'" if isinstance(data[key], str) else str(data[key])
@@ -1037,7 +1166,6 @@ class ISOValidator:
             
             return eval(temp_expr, {"__builtins__": None}, ctx)
         except Exception as e:
-            # print(f"DEBUG Error evaluating: {temp_expr} -> {e}")
             return False
 
     def _load_codelists(self) -> Dict[str, List[str]]:

@@ -40,5 +40,14 @@
         "expression": "not (exists('SvcLvl.Cd') and 'URGT' in str(DATA.get('SvcLvl.Cd'))) or DATA.get('IntrBkSttlmDt') == datetime.now().strftime('%Y-%m-%d')",
         "severity": "WARNING",
         "layer": 5
+    },
+    {
+        "rule_id": "L3-CHRGBR-VALID",
+        "description": "Charge Bearer Code Validation",
+        "type": "codelist",
+        "selector": ".*ChrgBr$",
+        "list_name": "charge_bearer",
+        "severity": "ERROR",
+        "layer": 3
     }
 ]

@@ -24,7 +24,8 @@
                             <div *ngFor="let n of lineNumbers">{{n}}</div>
                         </div>
                         <textarea class="xml-editor" [(ngModel)]="xmlContent" (input)="updateLineNumbers()"
-                            (scroll)="onTextareaScroll($event)" placeholder="Paste XML here..."></textarea>
+                            (scroll)="onTextareaScroll($event)" (keydown)="handleTabKey($event)"
+                            placeholder="Paste XML here..."></textarea>
 
                         <button mat-icon-button class="clear-editor-btn" (click)="clearAll()"
                             matTooltip="Clear XML Content" *ngIf="xmlContent">
@@ -54,46 +55,28 @@
                     <div class="message-type-selector">
                         <mat-form-field appearance="outline" class="full-width modern-search">
                             <mat-icon matPrefix>search</mat-icon>
-                            <input type="text" placeholder="Type a message type..." aria-label="Message Type" matInput
-                                [formControl]="messageControl" [matAutocomplete]="auto">
-                            <mat-autocomplete #auto="matAutocomplete" class="premium-autocomplete">
-                                <mat-optgroup label="Popular Messages">
-                                    <mat-option *ngFor="let option of popularMessages" [value]="option">
-                                        <div class="option-content">
-                                            <div class="family-icon"
-                                                [style.background-color]="getMessageFamily(option).color + '20'"
-                                                [style.color]="getMessageFamily(option).color">
-                                                <mat-icon>{{getMessageFamily(option).icon}}</mat-icon>
-                                            </div>
-                                            <div class="message-info">
-                                                <span class="m-code">{{option.split(' ')[0]}}</span>
-                                                <span class="m-desc">{{option.includes('(') ?
-                                                    option.split('(')[1].replace(')', '') : ''}}</span>
-                                            </div>
-                                            <mat-icon class="selected-check"
-                                                *ngIf="messageControl.value === option">check</mat-icon>
+                            <input type="text" placeholder="Search message type (Default: Auto-detect)"
+                                aria-label="Message Type" matInput [formControl]="messageControl"
+                                [matAutocomplete]="auto">
+                            <mat-autocomplete #auto="matAutocomplete" class="premium-autocomplete"
+                                [autoActiveFirstOption]="false">
+                                <mat-option *ngFor="let option of filteredOptions | async" [value]="option">
+                                    <div class="option-content">
+                                        <div class="family-icon"
+                                            [style.background-color]="getMessageFamily(option).color + '20'"
+                                            [style.color]="getMessageFamily(option).color">
+                                            <mat-icon>{{getMessageFamily(option).icon}}</mat-icon>
                                         </div>
-                                    </mat-option>
-                                </mat-optgroup>
-
-                                <mat-optgroup label="All Messages">
-                                    <mat-option *ngFor="let option of filteredOptions | async" [value]="option">
-                                        <div class="option-content">
-                                            <div class="family-icon"
-                                                [style.background-color]="getMessageFamily(option).color + '20'"
-                                                [style.color]="getMessageFamily(option).color">
-                                                <mat-icon>{{getMessageFamily(option).icon}}</mat-icon>
-                                            </div>
-                                            <div class="message-info">
-                                                <span class="m-code">{{option.split(' ')[0]}}</span>
-                                                <span class="m-desc">{{option.includes('(') ?
-                                                    option.split('(')[1].replace(')', '') : ''}}</span>
-                                            </div>
-                                            <mat-icon class="selected-check"
-                                                *ngIf="messageControl.value === option">check</mat-icon>
+                                        <div class="message-info">
+                                            <span class="m-code">{{option.split(' ')[0]}}</span>
+                                            <span class="m-desc">{{option.includes('(') ?
+                                                option.split('(')[1].replace(')', '') : 'Auto-detect Message
+                                                Type'}}</span>
                                         </div>
-                                    </mat-option>
-                                </mat-optgroup>
+                                        <mat-icon class="selected-check"
+                                            *ngIf="messageControl.value === option">check</mat-icon>
+                                    </div>
+                                </mat-option>
                             </mat-autocomplete>
                         </mat-form-field>
                     </div>
@@ -108,7 +91,6 @@
                             <mat-icon *ngIf="!isLoading">play_arrow</mat-icon>
                             {{isLoading ? 'VALIDATING...' : 'RUN VALIDATION'}}
                         </button>
-                        <button mat-stroked-button (click)="clearAll()">CLEAR</button>
                     </div>
 
                     <mat-divider></mat-divider>
@@ -119,54 +101,55 @@
     </div>
 
     <!-- Results Section -->
-    <div class="results-section" *ngIf="report || isLoading">
+    <div class="results-section" id="results-section" *ngIf="report || isLoading">
         <mat-progress-bar mode="indeterminate" *ngIf="isLoading"></mat-progress-bar>
 
         <div *ngIf="report" class="report-container animate-fade-in">
-            <mat-card [class.border-fail]="report.status === 'FAIL'" [class.border-pass]="report.status === 'PASS'">
+            <mat-card class="validation-report-card">
                 <mat-card-content>
-                    <div class="result-hero" [class.pass]="report.status === 'PASS'"
-                        [class.fail]="report.status === 'FAIL'" [class.warn]="report.status === 'WARNING'">
-                        <mat-icon class="hero-icon">{{report.status === 'PASS' ? 'check_circle' : (report.status ===
-                            'FAIL' ? 'cancel' : 'notification_important')}}</mat-icon>
-                        <div class="hero-text">
-                            <h3>{{report.status}}</h3>
-                            <p>{{report.status === 'PASS' ? 'Your message conforms to all ISO 20022 requirements.' :
-                                'Compliance issues detected in the message payload.'}}</p>
-                        </div>
-                    </div>
-
                     <div class="report-header">
-                        <div class="report-id">
-                            <h2>Validation Report</h2>
-                            <p>ID: {{report.validation_id}} | {{report.timestamp}}</p>
-                        </div>
-                        <div class="report-summary-pills">
-                            <div class="summary-pill" [class.bg-fail]="report.status === 'FAIL'"
-                                [class.bg-pass]="report.status === 'PASS'"
-                                [class.bg-warn]="report.status === 'WARNING'">
-                                <span class="pill-label">STATUS</span>
-                                <span class="pill-value">{{report.status}}</span>
+                        <div class="report-title-row">
+                            <div class="title-section">
+                                <h2>Validation Report</h2>
+                                <div class="status-badge" [class.badge-pass]="report.status === 'PASS'"
+                                    [class.badge-fail]="report.status === 'FAIL'"
+                                    [class.badge-warn]="report.status === 'WARNING'">
+                                    <mat-icon>{{report.status === 'PASS' ? 'check_circle' : (report.status === 'FAIL' ?
+                                        'cancel' : 'warning')}}</mat-icon>
+                                    <span>{{report.status}}</span>
+                                </div>
                             </div>
-                            <div class="summary-pill bg-dark">
-                                <span class="pill-label">DETECTION</span>
+                            <div class="report-meta">
+                                <span class="meta-item">
+                                    <mat-icon>fingerprint</mat-icon>
+                                    <span class="meta-label">Report ID:</span>
+                                    <span class="meta-value">{{report.validation_id}}</span>
+                                </span>
+                                <span class="meta-item">
+                                    <mat-icon>schedule</mat-icon>
+                                    <span class="meta-label">Timestamp:</span>
+                                    <span class="meta-value">{{report.timestamp}}</span>
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="report-summary-pills">
+                            <div class="summary-pill pill-message-type"
+                                *ngIf="report.message && report.message !== 'Unknown'">
+                                <span class="pill-label">MESSAGE TYPE</span>
                                 <span class="pill-value">{{report.message}}</span>
                             </div>
-                            <div class="summary-pill bg-light">
+                            <div class="summary-pill pill-metric">
                                 <span class="pill-label">ERRORS</span>
-                                <span class="pill-value">{{report.errors}}</span>
+                                <span class="pill-value pill-error">{{report.errors}}</span>
                             </div>
-                            <div class="summary-pill bg-light">
+                            <div class="summary-pill pill-metric">
                                 <span class="pill-label">WARNINGS</span>
-                                <span class="pill-value">{{report.warnings}}</span>
+                                <span class="pill-value pill-warning">{{report.warnings}}</span>
                             </div>
-                            <div class="summary-pill bg-light">
-                                <span class="pill-label">TIME</span>
+                            <div class="summary-pill pill-metric">
+                                <span class="pill-label">PROCESSING TIME</span>
                                 <span class="pill-value">{{report.total_time_ms}}ms</span>
-                            </div>
-                            <div class="summary-pill bg-dark" *ngIf="report.schema">
-                                <span class="pill-label">SCHEMA</span>
-                                <span class="pill-value">{{report.schema}}</span>
                             </div>
                         </div>
                     </div>

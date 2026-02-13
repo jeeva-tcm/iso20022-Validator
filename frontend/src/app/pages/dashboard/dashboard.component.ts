@@ -31,20 +31,38 @@ export class DashboardComponent implements OnInit {
 
     ngOnInit() {
         this.loadStats();
+        this.loadRecentActivity();
     }
 
     loadStats() {
-        this.http.get<any[]>(this.config.getApiUrl('/history')).subscribe({
+        // Use the dedicated stats endpoint for better performance
+        this.http.get<any>(this.config.getApiUrl('/dashboard/stats')).subscribe({
             next: (data) => {
-                this.stats.total = data.length;
-                this.stats.passed = data.filter(r => r.status === 'PASS').length;
-                this.stats.failed = data.filter(r => r.status === 'FAIL').length;
-                this.stats.efficiency = this.stats.total > 0 ?
-                    Math.round((this.stats.passed / this.stats.total) * 100) + '%' : '100%';
-
-                this.recentActivity = data.slice(0, 5);
+                this.stats.total = data.total_audits;
+                this.stats.passed = data.passed_messages;
+                this.stats.failed = data.failed_messages;
+                this.stats.efficiency = data.validation_quality + '%';
             },
-            error: (err) => console.error('Dashboard failed to load history:', err)
+            error: (err) => {
+                console.error('Dashboard failed to load stats:', err);
+                // Keep zeros as defaults
+            }
         });
+    }
+
+    loadRecentActivity() {
+        // Load recent activity separately (limited to 5 records)
+        this.http.get<any[]>(this.config.getApiUrl('/history?limit=5')).subscribe({
+            next: (data) => {
+                this.recentActivity = data;
+            },
+            error: (err) => console.error('Dashboard failed to load recent activity:', err)
+        });
+    }
+
+    refresh() {
+        // Public method to refresh all dashboard data
+        this.loadStats();
+        this.loadRecentActivity();
     }
 }

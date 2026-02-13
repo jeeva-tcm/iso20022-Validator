@@ -134,6 +134,25 @@ export class HistoryComponent implements OnInit {
         }
     }
 
+    deleteAllHistory() {
+        if (confirm('Are you sure you want to PERMANENTLY delete ALL history records? This cannot be undone.')) {
+            this.isLoading = true;
+            this.http.delete(this.config.getApiUrl('/history')).subscribe({
+                next: (res: any) => {
+                    this.loadHistory();
+                    this.expandedElement = null;
+                    this.expandedDetail = null;
+                    this.snackBar.open(res.message || 'All records deleted successfully.', 'Close', { duration: 3000 });
+                },
+                error: (err) => {
+                    console.error("Failed to delete all records:", err);
+                    this.isLoading = false;
+                    this.snackBar.open(`Failed to delete history. Status: ${err.status} ${err.statusText}`, 'Dismiss', { duration: 5000 });
+                }
+            });
+        }
+    }
+
     exportAudit() {
         this.isLoading = true;
         this.http.get(this.config.getApiUrl('/history/export'), { responseType: 'blob' }).subscribe({
