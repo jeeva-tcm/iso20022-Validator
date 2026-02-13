@@ -128,3 +128,78 @@ mat-card-content p {
         transform: translateY(0);
     }
 }
+
+/* Validation Section Styles */
+.validation-section-title {
+    color: #1e293b;
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-top: 24px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.fast-fail-title {
+    color: #dc2626;
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-top: 32px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.fast-fail-title mat-icon {
+    font-size: 24px;
+    width: 24px;
+    height: 24px;
+}
+
+.fast-fail-list {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.fast-fail-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    font-size: 0.95rem;
+    color: #334155;
+    background: #fef2f2;
+    padding: 16px;
+    border-radius: 12px;
+    border-left: 4px solid #dc2626;
+}
+
+.fast-fail-list mat-icon {
+    font-size: 22px;
+    width: 22px;
+    height: 22px;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.fast-fail-list strong {
+    color: #991b1b;
+    display: block;
+}
+
+.error-detail {
+    color: #6b7280;
+    font-size: 0.875rem;
+    margin-top: 6px;
+    padding-left: 34px;
+    font-style: italic;
+}
+
+.rule-list li strong {
+    color: #1e293b;
+    margin-right: 4px;
+}

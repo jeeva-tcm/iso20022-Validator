@@ -18,6 +18,9 @@
                     <button mat-stroked-button (click)="loadHistory()">
                         <mat-icon>refresh</mat-icon> REFRESH
                     </button>
+                    <button mat-stroked-button color="warn" (click)="deleteAllHistory()">
+                        <mat-icon>delete_forever</mat-icon> DELETE ALL
+                    </button>
                     <button mat-stroked-button color="accent" (click)="exportAudit()"
                         matTooltip="Download all history as CSV">
                         <mat-icon>file_download</mat-icon> EXPORT AUDIT

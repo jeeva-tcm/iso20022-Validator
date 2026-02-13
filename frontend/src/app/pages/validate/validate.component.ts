@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ViewChild, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
@@ -12,7 +12,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatDividerModule } from '@angular/material/divider';
-import { MatAutocompleteModule } from '@angular/material/autocomplete';
+import { MatAutocomplete, MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { HttpClient } from '@angular/common/http';
@@ -47,6 +47,8 @@ import { ConfigService } from '../../services/config.service';
     styleUrls: ['./validate.component.css']
 })
 export class ValidateComponent implements OnInit {
+    @ViewChild('auto') autocomplete!: MatAutocomplete;
+
     xmlContent: string = '';
     validationMode: string = 'Full 1-5';
     messageType: string = 'Auto-detect';
@@ -58,7 +60,7 @@ export class ValidateComponent implements OnInit {
     highlightTop: number = 0;
     showHighlight: boolean = false;
 
-    messageControl = new FormControl('Auto-detect');
+    messageControl = new FormControl('');
     filteredOptions: Observable<string[]> | undefined;
 
     allMessageTypes: string[] = ['Auto-detect'];
@@ -78,7 +80,6 @@ export class ValidateComponent implements OnInit {
     ];
 
     popularMessages: string[] = [
-        'Auto-detect',
         'pacs.008.001.08 (Local/Cross-Border Credit Transfer)',
         'camt.053.001.08 (Statement)',
         'pain.001.001.09 (Initiation)'
@@ -93,6 +94,8 @@ export class ValidateComponent implements OnInit {
         // Initialize with standard types immediately
         this.allMessageTypes = ['Auto-detect', ...this.standardMXTypes];
     }
+
+
 
     ngOnInit() {
         // 1. Check for reportId in query params (passed from History page)
@@ -124,7 +127,11 @@ export class ValidateComponent implements OnInit {
 
         // Sync local model with control
         this.messageControl.valueChanges.subscribe(val => {
-            if (val) this.messageType = val.split(' ')[0];
+            if (val) {
+                this.messageType = val.split(' ')[0];
+            } else {
+                this.messageType = 'Auto-detect';
+            }
         });
     }
 
@@ -136,6 +143,7 @@ export class ValidateComponent implements OnInit {
                 this.xmlContent = data.original_message;
                 this.updateLineNumbers();
                 this.isLoading = false;
+                this.scrollToResults();
             },
             error: (err) => {
                 console.error("Failed to load historical report:", err);
@@ -156,6 +164,14 @@ export class ValidateComponent implements OnInit {
 
     private _filter(value: string): string[] {
         const filterValue = value.toLowerCase();
+
+        // Search Engine Style:
+        // 1. If empty, show simplified "Popular/Recent" list
+        if (!filterValue) {
+            return ['Auto-detect', ...this.popularMessages];
+        }
+
+        // 2. If typing, show matching results from ALL types (flat list)
         return this.allMessageTypes.filter(option =>
             option.toLowerCase().includes(filterValue)
         );
@@ -164,6 +180,17 @@ export class ValidateComponent implements OnInit {
     onFileSelected(event: any) {
         const file: File = event.target.files[0];
         if (file) {
+            // Validate file type (must be XML)
+            if (!file.name.toLowerCase().endsWith('.xml') && file.type !== 'text/xml') {
+                this.snackBar.open('Invalid file type. Please upload an XML file.', 'Close', {
+                    duration: 4000,
+                    panelClass: ['warning-snackbar']
+                });
+                // Clear the file input
+                event.target.value = '';
+                return;
+            }
+
             const reader = new FileReader();
             reader.onload = (e: any) => {
                 this.xmlContent = e.target.result;
@@ -178,6 +205,28 @@ export class ValidateComponent implements OnInit {
         this.lineNumbers = Array.from({ length: Math.max(lines, 1) }, (_, i) => i + 1);
     }
 
+    handleTabKey(event: KeyboardEvent) {
+        if (event.key === 'Tab') {
+            event.preventDefault();
+
+            const textarea = event.target as HTMLTextAreaElement;
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+
+            // Insert tab character at cursor position
+            const tab = '\t';
+            this.xmlContent = this.xmlContent.substring(0, start) + tab + this.xmlContent.substring(end);
+
+            // Update line numbers
+            this.updateLineNumbers();
+
+            // Move cursor after the tab
+            setTimeout(() => {
+                textarea.selectionStart = textarea.selectionEnd = start + 1;
+            }, 0);
+        }
+    }
+
     onTextareaScroll(event: any) {
         const gutter = document.getElementById('line-gutter');
         if (gutter) {
@@ -188,40 +237,88 @@ export class ValidateComponent implements OnInit {
     formatXML() {
         if (!this.xmlContent || !this.xmlContent.trim()) return;
 
-        let formatted = '';
-        let indent = 0;
-        const tab = '  ';
-
         try {
-            // Split into tags and content parts using markers
-            const parts = this.xmlContent
-                .replace(/>\s*</g, '><') // normalize spaces between tags
-                .replace(/</g, '~@~<')
-                .replace(/>/g, '>~@~')
-                .split('~@~');
+            // Parse the XML
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(this.xmlContent, 'text/xml');
 
-            parts.forEach(part => {
-                const trimmed = part.trim();
-                if (!trimmed) return;
+            // Check for parsing errors
+            const parserError = xmlDoc.querySelector('parsererror');
+            if (parserError) {
+                this.snackBar.open('Invalid XML - cannot format', 'Close', { duration: 3000 });
+                return;
+            }
 
-                if (trimmed.match(/^<\/\w/)) {
-                    // Closing Tag
-                    indent = Math.max(0, indent - 1);
-                    formatted += tab.repeat(indent) + trimmed + '\n';
-                } else if (trimmed.match(/^<\w[^>]*[^\/]>$/) && !trimmed.startsWith('<?') && !trimmed.startsWith('<!')) {
-                    // Opening Tag (not self-closing, not declaration/comment)
-                    formatted += tab.repeat(indent) + trimmed + '\n';
-                    indent++;
-                } else {
-                    // Content or self-closing tag or declaration
-                    formatted += tab.repeat(Math.max(0, indent)) + trimmed + '\n';
+            // Format the XML using a recursive function
+            const formatNode = (node: Node, indent: number = 0): string => {
+                const indentStr = '  '.repeat(indent);
+
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                    const element = node as Element;
+                    const tagName = element.tagName;
+                    const children = Array.from(element.childNodes);
+
+                    // Check if element has only text content (leaf node)
+                    const hasOnlyText = children.length === 1 && children[0].nodeType === Node.TEXT_NODE;
+                    const textContent = element.textContent?.trim() || '';
+
+                    // Build attributes string
+                    let attrsStr = '';
+                    if (element.attributes.length > 0) {
+                        attrsStr = Array.from(element.attributes)
+                            .map(attr => ` ${attr.name}="${attr.value}"`)
+                            .join('');
+                    }
+
+                    // If leaf node with simple text, keep on one line
+                    if (hasOnlyText && textContent) {
+                        return `${indentStr}<${tagName}${attrsStr}>${textContent}</${tagName}>\n`;
+                    }
+
+                    // If empty element
+                    if (children.length === 0 && !textContent) {
+                        return `${indentStr}<${tagName}${attrsStr}/>\n`;
+                    }
+
+                    // If element has child elements, format with proper nesting
+                    let result = `${indentStr}<${tagName}${attrsStr}>\n`;
+
+                    children.forEach(child => {
+                        if (child.nodeType === Node.ELEMENT_NODE) {
+                            result += formatNode(child, indent + 1);
+                        } else if (child.nodeType === Node.TEXT_NODE) {
+                            const text = child.textContent?.trim();
+                            if (text) {
+                                result += `${indentStr}  ${text}\n`;
+                            }
+                        }
+                    });
+
+                    result += `${indentStr}</${tagName}>\n`;
+                    return result;
                 }
-            });
+
+                return '';
+            };
+
+            // Start formatting from root
+            let formatted = '';
+
+            // Preserve XML declaration if it exists
+            if (this.xmlContent.includes('<?xml')) {
+                formatted = '<?xml version="1.0" encoding="UTF-8"?>\n';
+            }
+
+            // Format the document element
+            if (xmlDoc.documentElement) {
+                formatted += formatNode(xmlDoc.documentElement, 0);
+            }
 
             this.xmlContent = formatted.trim();
             this.updateLineNumbers();
         } catch (e) {
             console.error('Formatting error:', e);
+            this.snackBar.open('Error formatting XML', 'Close', { duration: 3000 });
         }
     }
 
@@ -247,7 +344,9 @@ export class ValidateComponent implements OnInit {
                 this.report = data;
                 this.isLoading = false;
                 this.snackBar.open('Validation Complete', 'Close', { duration: 3000 });
+                this.scrollToResults();
             },
+
             error: (err) => {
                 console.warn("Backend unavailable, switching to DEMO MODE", err);
                 this.snackBar.open('Backend Unreachable. Running in Offline Demo Mode.', 'OK', {
@@ -309,6 +408,7 @@ export class ValidateComponent implements OnInit {
                 ]
             };
             this.isLoading = false;
+            this.scrollToResults();
             console.warn("⚠️ Backend not connected. Running in DEMO MODE with sample data.");
             // alert("⚠️ Backend not connected. Running in DEMO MODE with sample data.");
         }, 1500);
@@ -379,6 +479,7 @@ export class ValidateComponent implements OnInit {
         }
     }
 
+
     getReportLayers(): string[] {
         if (!this.report?.layer_status) return [];
         return Object.keys(this.report.layer_status).sort();
@@ -391,7 +492,17 @@ export class ValidateComponent implements OnInit {
 
     getLayerColor(layer: any) {
         const status = this.report?.layer_status[layer]?.status;
-        return status === '✅' ? '#2e7d32' : (status === '❌' ? '#d32f2f' : '#9e9e9e');
+        return status === '✅' ? 'text-green-600' : (status === '❌' ? 'text-red-500' : 'text-gray-400');
+    }
+
+    private scrollToResults() {
+        // Wait for *ngIf="report" render
+        setTimeout(() => {
+            const element = document.getElementById('results-section');
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }, 300);
     }
 
     clearAll() {

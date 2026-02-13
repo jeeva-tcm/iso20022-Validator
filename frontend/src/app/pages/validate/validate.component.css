@@ -238,6 +238,13 @@ textarea {
 }
 
 
+/* Validation Report Card */
+.validation-report-card {
+    border-radius: 16px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    border: 1px solid #e2e8f0;
+}
+
 /* Report Section */
 .results-section {
     margin-top: 48px;
@@ -245,49 +252,190 @@ textarea {
 
 .report-header {
     display: flex;
+    flex-direction: column;
+    gap: 28px;
+    margin-bottom: 32px;
+    padding: 32px;
+    background: linear-gradient(135deg, #fafafa 0%, #ffffff 100%);
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+}
+
+.report-title-row {
+    display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 32px;
-    padding-bottom: 24px;
-    border-bottom: 1px solid #f1f5f9;
+    gap: 24px;
+    flex-wrap: wrap;
+    width: 100%;
 }
 
-.report-id {
+.title-section {
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    flex: 0 0 auto;
 }
 
-.report-id h2 {
-    font-size: 1.5rem;
+.title-section h2 {
+    font-size: 1.875rem;
     font-weight: 700;
-    margin: 0 0 4px 0;
-    color: #1e293b;
+    margin: 0;
+    color: #0f172a;
+    letter-spacing: -0.025em;
+}
+
+/* Status Badge */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 32px;
+    font-size: 0.875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+}
+
+.status-badge:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+}
+
+.status-badge mat-icon {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+}
+
+.badge-pass {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+}
+
+.badge-fail {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: white;
+}
+
+.badge-warn {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: white;
+}
+
+.report-meta {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    align-items: center;
+    flex: 1;
+    justify-content: flex-end;
+}
+
+.meta-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    color: #475569;
+    background: white;
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+.meta-item mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    color: #64748b;
+}
+
+.meta-label {
+    font-weight: 600;
+    color: #64748b;
+}
+
+.meta-value {
+    font-weight: 600;
+    color: #0f172a;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
 }
 
 .report-summary-pills {
     display: flex;
-    gap: 16px;
+    gap: 12px;
+    flex-wrap: wrap;
+    width: 100%;
 }
 
-/* Modern Summary Stats */
+/* Modern Summary Pills - Enterprise Style */
 .summary-pill {
-    padding: 12px 20px;
+    display: flex;
+    flex-direction: column;
+    padding: 16px 20px;
     border-radius: 12px;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    min-width: 100px;
+    background: white;
+    border: 1.5px solid #e2e8f0;
+    min-width: 140px;
+    flex: 1;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 }
 
-.summary-pill.bg-pass {
-    background: linear-gradient(135deg, #ecfdf5, #d1fae5);
-    border-color: #a7f3d0;
-    color: #065f46;
+.summary-pill:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
-.summary-pill.bg-fail {
-    background: linear-gradient(135deg, #fef2f2, #fee2e2);
-    border-color: #fecaca;
-    color: #991b1b;
+.pill-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.075em;
+    color: #64748b;
+    margin-bottom: 6px;
+}
+
+.pill-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+/* Message Type Pill */
+.pill-message-type {
+    background: linear-gradient(135deg, #eff6ff, #dbeafe);
+    border-color: #93c5fd;
+}
+
+.pill-message-type .pill-label {
+    color: #1e40af;
+}
+
+.pill-message-type .pill-value {
+    color: #1e3a8a;
+    font-weight: 800;
+}
+
+/* Metric Pills */
+.pill-metric {
+    background: #fafafa;
+    border-color: #e5e7eb;
+}
+
+.pill-error {
+    color: #dc2626 !important;
+    font-weight: 800 !important;
+}
+
+.pill-warning {
+    color: #d97706 !important;
+    font-weight: 800 !important;
 }
 
 /* Layer Visualization */
@@ -554,39 +702,68 @@ textarea {
     font-weight: 500 !important;
 }
 
-/* Autocomplete Panel */
-::ng-deep .premium-autocomplete.mat-mdc-autocomplete-panel {
+/* Autocomplete Panel - Clean Search Style */
+::ng-deep .mat-mdc-autocomplete-panel.premium-autocomplete {
     background: white !important;
-    border-radius: 16px !important;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
+    border-radius: 0 0 16px 16px !important;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
     border: 1px solid #e2e8f0 !important;
-    margin-top: 8px !important;
-    max-height: 450px !important;
+    border-top: none !important;
+    margin-top: -2px !important;
+    max-height: 240px !important;
     padding: 8px 0 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    min-width: 100% !important;
 }
 
-::ng-deep .premium-autocomplete .mat-mdc-optgroup-label {
-    font-size: 0.85rem !important;
-    font-weight: 700 !important;
-    color: #475569 !important;
-    padding: 16px 20px 8px !important;
-    text-transform: none !important;
-    letter-spacing: normal !important;
+/* Force CDK overlay to position below */
+
+
+/* Ensure overlay container allows downward positioning */
+
+
+
+/* Individual Options - Clean List Style */
+::ng-deep .mat-mdc-autocomplete-panel.premium-autocomplete .mat-mdc-option {
+    height: 60px !important;
+    min-height: 60px !important;
+    padding: 0 16px !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    border-bottom: 1px solid #f1f5f9 !important;
 }
 
-::ng-deep .premium-autocomplete .mat-mdc-option {
-    height: 64px !important;
-    padding: 0 20px !important;
-    margin: 4px 8px !important;
-    border-radius: 10px !important;
+::ng-deep .mat-mdc-autocomplete-panel.premium-autocomplete .mat-mdc-option:last-child {
+    border-bottom: none !important;
 }
 
-::ng-deep .premium-autocomplete .mat-mdc-option:hover {
+::ng-deep .mat-mdc-autocomplete-panel.premium-autocomplete .mat-mdc-option:hover {
     background-color: #f8fafc !important;
 }
 
-::ng-deep .premium-autocomplete .mat-mdc-option.mdc-list-item--selected:not(.mdc-list-item--disabled) {
+::ng-deep .mat-mdc-autocomplete-panel.premium-autocomplete .mat-mdc-option.mdc-list-item--selected {
     background-color: #f1f5f9 !important;
+}
+
+::ng-deep .mat-mdc-autocomplete-panel.premium-autocomplete .mat-mdc-option:hover {
+    background-color: #f8fafc !important;
+    border-color: #e2e8f0 !important;
+    transform: translateX(4px) !important;
+}
+
+::ng-deep .mat-mdc-autocomplete-panel.premium-autocomplete .mat-mdc-option.mdc-list-item--selected:not(.mdc-list-item--disabled) {
+    background-color: #eff6ff !important;
+    border-color: #bfdbfe !important;
+}
+
+::ng-deep .mat-mdc-autocomplete-panel.premium-autocomplete .mat-mdc-option.mdc-list-item--selected:hover {
+    background-color: #dbeafe !important;
+}
+
+/* Add bottom padding for last items */
+::ng-deep .mat-mdc-autocomplete-panel.premium-autocomplete .mat-mdc-optgroup:last-child {
+    padding-bottom: 12px !important;
 }
 
 /* Option Content Layout */
@@ -594,16 +771,19 @@ textarea {
     display: flex;
     align-items: center;
     width: 100%;
-    gap: 16px;
+    gap: 14px;
+    padding: 0 !important;
 }
 
 .family-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
 }
 
 .family-icon mat-icon {
@@ -616,31 +796,105 @@ textarea {
     display: flex;
     flex-direction: column;
     flex: 1;
+    gap: 4px;
+    min-width: 0;
 }
 
 .m-code {
     font-size: 0.95rem;
     font-weight: 700;
-    color: #1e293b;
-    line-height: 1.25;
+    color: #0f172a;
+    line-height: 1.2;
 }
 
 .m-desc {
     font-size: 0.8rem;
     color: #64748b;
     font-weight: 500;
-    margin-top: 2px;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .selected-check {
-    color: #059669;
-    font-size: 20px;
-    width: 20px;
-    height: 20px;
+    color: #2563eb;
+    font-size: 22px;
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    animation: checkPop 0.3s ease;
 }
 
-/* Divider in Select */
-::ng-deep .premium-autocomplete .mat-mdc-optgroup:not(:first-child) {
-    border-top: 1px solid #f1f5f9;
-    margin-top: 8px;
+@keyframes checkPop {
+    0% {
+        transform: scale(0);
+    }
+
+    50% {
+        transform: scale(1.2);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* Divider between groups */
+::ng-deep .premium-autocomplete .mat-mdc-optgroup:not(:first-child)::before {
+    content: '';
+    display: block;
+    height: 1px;
+    background: #f1f5f9;
+    margin: 0 24px 16px 24px;
+}
+
+/* Scrollbar Styling */
+::ng-deep .premium-autocomplete.mat-mdc-autocomplete-panel::-webkit-scrollbar {
+    width: 8px;
+}
+
+::ng-deep .premium-autocomplete.mat-mdc-autocomplete-panel::-webkit-scrollbar-track {
+    background: #f8fafc;
+    border-radius: 0 16px 16px 0;
+}
+
+::ng-deep .premium-autocomplete.mat-mdc-autocomplete-panel::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
+::ng-deep .premium-autocomplete.mat-mdc-autocomplete-panel::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Fix for table width alignment - Issues Table */
+.issues-table-container {
+    width: 100%;
+    margin-top: 24px;
+    overflow-x: auto;
+}
+
+.issues-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    /* Ensures uniform distribution or respects width settings */
+}
+
+.issues-table th {
+    text-align: left;
+}
+
+/* Give more space to the Message column (3rd column) */
+.issues-table th:nth-child(3),
+.issues-table td:nth-child(3) {
+    width: 50%;
+}
+
+/* Action column width */
+.issues-table th:nth-child(4),
+.issues-table td:nth-child(4) {
+    width: 100px;
+    text-align: center;
 }

@@ -230,12 +230,8 @@ class ISOValidator:
         else:
             detected_type = message_type
 
-        # NEW: Normalize to Family ONLY (e.g. pacs.008.001.08 -> pacs.008)
-        # This makes the entire pipeline version-blind as requested
-        if detected_type and "." in detected_type:
-            parts = detected_type.split(".")
-            if len(parts) >= 2:
-                detected_type = ".".join(parts[:2])
+        # Keep full version in report for UI display
+        # The _get_xsd_path function will handle version-blind matching internally
 
         validation_id = f"VAL-{time.strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
         report = ValidationReport(validation_id, detected_type, mode)
@@ -262,11 +258,7 @@ class ISOValidator:
                         extracted = parts[-1]
                     
                     if extracted != "Unknown":
-                        # Normalize to family here too
-                        raw_parts = extracted.split(".")
-                        if len(raw_parts) >= 2:
-                            extracted = ".".join(raw_parts[:2])
-                            
+                        # Keep full version for display
                         report.message_type = extracted
                         detected_type = extracted
             except: 
@@ -415,7 +407,9 @@ class ISOValidator:
         return "Unknown"
 
     def _finalize_report(self, report: ValidationReport, start_time: float) -> ValidationReport:
-        report.total_time_ms = (time.time() - start_time) * 1000
+        # Calculate total time as the sum of all layer times to ensure consistency in UI
+        total_layers = sum(l.get("time", 0) for l in report.layer_status.values())
+        report.total_time_ms = total_layers
         return report
 
     async def _run_layer_1(self, xml_content: str, report: ValidationReport, filename: Optional[str] = None) -> bool:
@@ -428,9 +422,9 @@ class ISOValidator:
         # 1. Payload Presence
         if not xml_content or not xml_content.strip():
             report.add_issue(ValidationIssue(
-                "ERROR", 1, "TECH-001", "PAYLOAD_PRESENCE",
-                "Empty or missing payload.",
-                "Provide a valid XML string or file."
+                "ERROR", 1, "Empty File", "Payload Missing",
+                "The uploaded file is empty or no content was provided.",
+                "Please upload a valid XML message file or paste XML content."
             ))
             report.layer_status["1"] = {"status": "❌", "time": (time.time() - start) * 1000}
             return False
@@ -442,9 +436,9 @@ class ISOValidator:
         
         if not is_xml_ext or (not filename and not is_xml_content and not xml_content.lstrip().startswith('<')):
             report.add_issue(ValidationIssue(
-                "ERROR", 1, "TECH-002", "FILE_TYPE",
-                "Invalid file format. Only XML is accepted.",
-                "Ensure the file ends in .xml or content starts with valid XML declaration."
+                "ERROR", 1, "Wrong File Type", "Not an XML File",
+                "The uploaded file is not a valid XML document.",
+                "Please ensure your file has a .xml extension and starts with <?xml version=\"1.0\" encoding=\"UTF-8\"?>."
             ))
             report.layer_status["1"] = {"status": "❌", "time": (time.time() - start) * 1000}
             return False
@@ -453,9 +447,9 @@ class ISOValidator:
         size_kb = len(xml_content.encode('utf-8')) / 1024
         if size_kb > 100: # Standard SWIFT limit
              report.add_issue(ValidationIssue(
-                 "ERROR", 1, "TECH-003", "PAYLOAD_SIZE", 
-                 f"Message size ({size_kb:.1f} KB) exceeds the limit.",
-                 "Reduce payload size below 100 KB."
+                 "ERROR", 1, "File Too Large", "Size Limit Exceeded", 
+                 f"Your message is {size_kb:.1f} KB, which exceeds the maximum allowed size of 100 KB.",
+                 "Please reduce the message size or split it into multiple messages. SWIFT InterAct has a 100 KB limit."
              ))
              report.layer_status["1"] = {"status": "❌", "time": (time.time() - start) * 1000}
              return False
@@ -465,9 +459,9 @@ class ISOValidator:
         header_match = re.search(r'<\?xml[^>]+encoding=["\']([^"\']+)["\']', xml_content, re.IGNORECASE)
         if not header_match:
              report.add_issue(ValidationIssue(
-                "ERROR", 1, "TECH-004", "ENCODING",
-                "Missing XML declaration or encoding header.",
-                "Add <?xml version=\"1.0\" encoding=\"UTF-8\"?> at the top of the file."
+                "ERROR", 1, "Missing Header", "No XML Declaration",
+                "Your XML file is missing the required declaration header.",
+                "Add this line at the very top of your file: <?xml version=\"1.0\" encoding=\"UTF-8\"?>"
             ))
              report.layer_status["1"] = {"status": "❌", "time": (time.time() - start) * 1000}
              return False
@@ -475,9 +469,9 @@ class ISOValidator:
             encoding = header_match.group(1).upper()
             if encoding != "UTF-8":
                 report.add_issue(ValidationIssue(
-                    "ERROR", 1, "TECH-004", "ENCODING",
-                    f"Invalid encoding: {encoding}. Must be UTF-8.",
-                    "Update XML header to <?xml version=\"1.0\" encoding=\"UTF-8\"?>."
+                    "ERROR", 1, "Wrong Encoding", "Invalid Character Encoding",
+                    f"Your file uses {encoding} encoding, but ISO 20022 messages must use UTF-8.",
+                    "Change the encoding in your XML header to: <?xml version=\"1.0\" encoding=\"UTF-8\"?>"
                 ))
                 report.layer_status["1"] = {"status": "❌", "time": (time.time() - start) * 1000}
                 return False
@@ -486,9 +480,9 @@ class ISOValidator:
         illegal_chars = re.findall(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', xml_content)
         if illegal_chars:
             report.add_issue(ValidationIssue(
-                "ERROR", 1, "TECH-005", "ILLEGAL_CHARS",
-                "Message contains illegal control characters (ASCII 0-31).",
-                "Remove hidden non-printable characters or system symbols."
+                "ERROR", 1, "Invalid Characters", "Hidden Characters Found",
+                "Your message contains invisible control characters that are not allowed.",
+                "These hidden characters may have come from copy-pasting. Please use a plain text editor to clean your XML."
             ))
             report.layer_status["1"] = {"status": "❌", "time": (time.time() - start) * 1000}
             return False
@@ -507,9 +501,9 @@ class ISOValidator:
             
             if not iso_nodes:
                 report.add_issue(ValidationIssue(
-                    "ERROR", 1, "TECH-007", "DOCUMENT_DETECTION",
-                    "Missing mandatory ISO 20022 payload (Document/BusMsg).",
-                    "Ensure the message structure follows ISO 20022 MX formatting."
+                    "ERROR", 1, "Missing Structure", "No ISO 20022 Container",
+                    "Your XML is missing the required <Document> or <BusMsg> wrapper element.",
+                    "ISO 20022 messages must have a <Document> root element. Check the message structure against standard templates."
                 ))
                 report.layer_status["1"] = {"status": "❌", "time": (time.time() - start) * 1000}
                 return False
@@ -524,9 +518,9 @@ class ISOValidator:
             # Namespace Validation
             if not re.match(r'^urn:iso:std:iso:20022:tech:xsd:[a-z]{4}\.\d{3}\.\d{3}\.\d{2}$', ns) and "head.001" not in ns:
                 report.add_issue(ValidationIssue(
-                    "ERROR", 1, "TECH-008", "NAMESPACE_VALIDATION",
-                    f"Invalid namespace format: {ns}",
-                    "Namespace must follow 'urn:iso:std:iso:20022:tech:xsd:[family].[msg].[variant].[ver]'."
+                    "ERROR", 1, "Wrong Namespace", "Invalid ISO Namespace",
+                    f"The namespace '{ns}' doesn't match the ISO 20022 standard format.",
+                    "Use the correct namespace format: urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08 (example for pacs.008)."
                 ))
 
             # Metadata for later layers
@@ -534,16 +528,16 @@ class ISOValidator:
 
         except etree.XMLSyntaxError as e:
             report.add_issue(ValidationIssue(
-                "ERROR", 1, "REG-002", str(e.lineno),
-                "Malformed XML structure",
-                f"Syntax error at line {e.lineno}: {str(e)}."
+                "ERROR", 1, "XML Syntax Error", f"Line {e.lineno}",
+                "Your XML has a syntax error - check for missing or incorrect tags.",
+                f"Error details: {str(e)}. Common issues: unclosed tags, missing brackets, or typos in element names."
             ))
             report.layer_status["1"] = {"status": "❌", "time": (time.time() - start) * 1000}
             return False
 
         # Finish Layer 1
         success = report.status != "FAIL"
-        report.layer_status["1"] = {"status": "✅" if success else "❌", "time": (time.time() - start) * 1000}
+        report.layer_status["1"] = {"status": "✅" if success else "❌", "time": round((time.time() - start) * 1000, 2)}
         return success
 
     async def _run_layer_2(self, xml_content: str, report: ValidationReport, message_type: str) -> bool:
@@ -558,7 +552,7 @@ class ISOValidator:
             # Step 1 — Load Schema Set
             xsd_full_path = self._get_xsd_path(message_type)
             if not xsd_full_path or not os.path.exists(xsd_full_path):
-                report.add_issue(ValidationIssue("ERROR", 2, "SCH-001", "/", f"Schema file not found for '{message_type}'", "Ensure .xsd exists in repository"))
+                report.add_issue(ValidationIssue("ERROR", 2, "Schema Not Found", "Missing Validation Template", f"Cannot find the validation template for message type '{message_type}'.", "The schema file (.xsd) for this message type is not available in the system. Contact support if this message type should be supported."))
                 report.layer_status["2"] = {"status": "❌", "time": 0}
                 return False
 
@@ -575,7 +569,7 @@ class ISOValidator:
                     target_node = [full_xml_doc]
             
             if not target_node:
-                report.add_issue(ValidationIssue("ERROR", 2, "SCH-002", "/", "Structural Root (<Document>/<BusMsg>) not found for validation.", "Check message packaging."))
+                report.add_issue(ValidationIssue("ERROR", 2, "Missing Document", "No Root Element", "Cannot find the main <Document> or <BusMsg> container in your XML.", "Your message structure is incorrect. ISO 20022 messages must have a <Document> wrapper element."))
                 report.layer_status["2"] = {"status": "❌", "time": (time.time() - start) * 1000}
                 return False
 

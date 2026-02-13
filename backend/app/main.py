@@ -103,6 +103,44 @@ def get_history(skip: int = 0, limit: int = 100, db: Session = Depends(database.
         print(f"Error fetching history: {e}")
         return []
 
+@app.get("/dashboard/stats", response_model=schemas.DashboardStats)
+def get_dashboard_stats(db: Session = Depends(database.get_db)):
+    """Get aggregated dashboard statistics"""
+    try:
+        # Get total count
+        total_audits = db.query(history.ValidationHistory).count()
+        
+        # Get passed count
+        passed_messages = db.query(history.ValidationHistory).filter(
+            history.ValidationHistory.status == 'PASS'
+        ).count()
+        
+        # Get failed count
+        failed_messages = db.query(history.ValidationHistory).filter(
+            history.ValidationHistory.status == 'FAIL'
+        ).count()
+        
+        # Calculate validation quality percentage
+        validation_quality = 0
+        if total_audits > 0:
+            validation_quality = round((passed_messages / total_audits) * 100)
+        
+        return {
+            "total_audits": total_audits,
+            "passed_messages": passed_messages,
+            "failed_messages": failed_messages,
+            "validation_quality": validation_quality
+        }
+    except Exception as e:
+        print(f"Error fetching dashboard stats: {e}")
+        # Return zeros if there's an error
+        return {
+            "total_audits": 0,
+            "passed_messages": 0,
+            "failed_messages": 0,
+            "validation_quality": 0
+        }
+
 @app.get("/history/export")
 def export_history(db: Session = Depends(database.get_db)):
     try:
@@ -150,6 +188,19 @@ def get_history_detail(validation_id: str, db: Session = Depends(database.get_db
         "report": result.report_json,
         "original_message": result.original_message
     }
+
+@app.delete("/history")
+def delete_all_history(db: Session = Depends(database.get_db)):
+    print("DEBUG: Hit delete_all_history endpoint")
+    try:
+        num_deleted = db.query(history.ValidationHistory).delete(synchronize_session=False)
+        db.commit()
+        print(f"DEBUG: Deleted {num_deleted} records")
+        return {"message": f"Deleted {num_deleted} records successfully"}
+    except Exception as e:
+        print(f"DEBUG: Error deleting history: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/history/{validation_id}")
 def delete_history_record(validation_id: str, db: Session = Depends(database.get_db)):

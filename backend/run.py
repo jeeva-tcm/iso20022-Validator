@@ -7,7 +7,7 @@ try:
     from app.main import app
     
     if __name__ == "__main__":
-        uvicorn.run(app, host="127.0.0.1", port=8001, reload=False)
+        uvicorn.run("app.main:app", host="0.0.0.0", port=8001, reload=True)
 
 except ImportError as e:
     error_msg = f"MISSING DEPENDENCY: {str(e)}\n\nPlease run: pip install -r requirements.txt"
